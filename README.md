@@ -1,44 +1,57 @@
-## ECEGR 4640 01 25FQ Iot
+# ECEGR 4640 01 25FQ IoT - Weather Station
 
-A class project to create a Weather Station for Yes Farm operated by the Black Farmers Collective. 
+A class project to create a standalone, offline Weather Station for **Yes Farm**, operated by the Black Farmers Collective.
 
-Uses a Raspberry Pi, Sparkfun weather station modules, and an associated HAT.
-_Note on picking a RPi: anything with a Broadcom modem or with the modern (RPi5) GPIO scheme will not work properly_
+This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log sensor data to SQLite and a Flask-based web dashboard. It functions as a Captive Portal, allowing users to view weather data without an internet connection.
+
+### Hardware Notes
+*   **Controller:** Raspberry Pi Zero 2 W.
+*   **Sensors:** SparkFun Weather Meters (Wind/Rain) + Associated HAT + BME280.
+*   **Compatibility Warning:** Boards with Broadcom modems or the modern RPi5 GPIO scheme may not work with the current library set.
+
+---
 
 ## Installation & Setup Guide
----
-**OS:** Raspberry Pi OS Lite (64-bit or 32-bit).
-**User:** `weatherstation`
 
-1.  **Flash & Update:**
+**Target OS:** Raspberry Pi OS Lite (Bookworm or Trixie) - 32-bit or 64-bit.
+**Default User:** `weatherstation`
+
+### Phase 1: System Preparation
+
+1.  **Update System:**
     ```bash
     sudo apt update && sudo apt upgrade -y
     ```
 
-2.  **Enable I2C (For Sensors):**
-    *   Run `sudo raspi-config` -> **Interface Options** -> **I2C** -> **Yes**.
+2.  **Enable I2C Interface:**
+    *   Run `sudo raspi-config`
+    *   Navigate to **Interface Options** -> **I2C** -> **Yes**.
 
-3.  **Install System Dependencies:**
+3.  **Install Dependencies:**
+    *   *Includes system math libraries for NumPy and network tools for the hotspot.*
     ```bash
     sudo apt install git python3-venv python3-pip libopenblas-dev libatlas-base-dev i2c-tools hostapd dnsmasq dhcpcd-base -y
     ```
 
-4.  **Allow Web Server to Set Time:**
+4.  **Allow Web Server to Sync Time:**
+    *   Allows the `weatherstation` user to update the system clock via the web dashboard.
     ```bash
     sudo visudo
     ```
-    Add at the bottom:
-    `weatherstation ALL=(ALL) NOPASSWD: /usr/bin/date`
+    Add this line to the very bottom of the file:
+    ```text
+    weatherstation ALL=(ALL) NOPASSWD: /usr/bin/date
+    ```
 
----
+### Phase 2: Project Environment
 
-1.  **Create Folders:**
+1.  **Create Directory Structure:**
     ```bash
     mkdir -p ~/weather_project/static
     mkdir -p ~/weather_data
     ```
 
-2.  **Setup Virtual Environment:**
+2.  **Setup Python Virtual Environment:**
     ```bash
     cd ~/weather_project
     python3 -m venv venv
@@ -47,63 +60,73 @@ _Note on picking a RPi: anything with a Broadcom modem or with the modern (RPi5)
     ```
 
 3.  **Download Offline Assets:**
+    *   *Since the station will be offline, Chart.js must be stored locally.*
     ```bash
     cd ~/weather_project/static
     wget -O chart.js https://cdn.jsdelivr.net/npm/chart.js
     ```
 
-4.  **Deploy Files:**
-    Place your Python scripts in `~/weather_project/`:
-    *   `setup_db.py`: Initializes DB in `../weather_data/`.
-    *   `logger.py`: Reads sensors, writes to DB.
-    *   `app.py`: Flask web server.
+4.  **Deploy Source Code:**
+    Place the project Python scripts into `~/weather_project/`:
+    *   `setup_db.py`
+    *   `logger.py`
+    *   `app.py`
 
 5.  **Initialize Database:**
     ```bash
     source ~/weather_project/venv/bin/activate
     python ~/weather_project/setup_db.py
     ```
----
-Create two service files in `/etc/systemd/system/`.
 
-**1. `weather-logger.service`**
+### Phase 3: Automation (Systemd Services)
+
+Create the services to run the logger and web server automatically on boot.
+
+**1. Logger Service:** (`sudo nano /etc/systemd/system/weather-logger.service`)
 ```ini
 [Unit]
 Description=Weather Logger
 After=network.target
+
 [Service]
 ExecStart=/home/weatherstation/weather_project/venv/bin/python /home/weatherstation/weather_project/logger.py
 WorkingDirectory=/home/weatherstation/weather_project
 User=weatherstation
 Restart=always
+
 [Install]
 WantedBy=multi-user.target
 ```
 
-**2. `weather-web.service`**
+**2. Web Interface Service:** (`sudo nano /etc/systemd/system/weather-web.service`)
 ```ini
 [Unit]
 Description=Weather WebUI
 After=network.target
+
 [Service]
 ExecStart=/home/weatherstation/weather_project/venv/bin/python /home/weatherstation/weather_project/app.py
 WorkingDirectory=/home/weatherstation/weather_project
 User=weatherstation
 Restart=always
+
 [Install]
 WantedBy=multi-user.target
 ```
 
-**Enable them:**
+**3. Enable Services:**
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable weather-logger.service
 sudo systemctl enable weather-web.service
 ```
 
----
+### Phase 4: Network Configuration (Hotspot & Captive Portal)
 
-1.  **Kill System DNS (Frees Port 53 for dnsmasq):**
+*Note: These steps prevent conflicts between NetworkManager and dnsmasq on newer Raspberry Pi OS versions.*
+
+1.  **Disable System DNS Resolver:**
+    *   Frees Port 53 for our specific use.
     ```bash
     sudo systemctl stop systemd-resolved
     sudo systemctl disable systemd-resolved
@@ -111,32 +134,34 @@ sudo systemctl enable weather-web.service
     echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
     ```
 
-2.  **Ignore WiFi in NetworkManager (Prevents boot conflicts):**
-    Edit `/etc/NetworkManager/NetworkManager.conf`:
+2.  **Configure NetworkManager:**
+    *   Tells the OS to ignore the WiFi chip so `hostapd` can manage it.
+    *   Edit `/etc/NetworkManager/NetworkManager.conf`:
     ```ini
     [keyfile]
     unmanaged-devices=interface-name:wlan0
     ```
 
 3.  **Set Static IP:**
-    Edit `/etc/dhcpcd.conf` (Add to bottom):
+    *   Edit `/etc/dhcpcd.conf` (Add to bottom):
     ```text
     interface wlan0
     static ip_address=192.168.4.1/24
     nohook wpa_supplicant
     ```
 
-4.  **Configure DHCP/Captive Portal:**
-    Edit `/etc/dnsmasq.conf`:
+4.  **Configure DHCP & Captive Portal:**
+    *   Edit `/etc/dnsmasq.conf`:
     ```text
     interface=wlan0
     dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+    # Captive Portal Logic: Redirect all domains to the Pi
     address=/#/192.168.4.1
     no-resolv
     ```
 
-5.  **Configure Hotspot:**
-    Edit `/etc/hostapd/hostapd.conf`:
+5.  **Configure Hotspot Radio:**
+    *   Edit `/etc/hostapd/hostapd.conf`:
     ```text
     interface=wlan0
     driver=nl80211
@@ -146,11 +171,30 @@ sudo systemctl enable weather-web.service
     auth_algs=1
     ignore_broadcast_ssid=0
     ```
-    Point to it in `/etc/default/hostapd`:
-    `DAEMON_CONF="/etc/hostapd/hostapd.conf"`
+    *   Point system to config: Edit `/etc/default/hostapd` and find `DAEMON_CONF`:
+    ```text
+    DAEMON_CONF="/etc/hostapd/hostapd.conf"
+    ```
+
+### Phase 5: Hardening (Low-Write Mode)
+*Prevents SD card corruption during abrupt power loss.*
+
+1.  **Disable Swap:**
+    ```bash
+    sudo systemctl disable dphys-swapfile
+    sudo dphys-swapfile swapoff
+    ```
+
+2.  **Move Logs to RAM:**
+    *   Edit `/etc/fstab` and add these lines:
+    ```text
+    tmpfs    /tmp    tmpfs    defaults,noatime,nosuid,size=100m    0 0
+    tmpfs    /var/log    tmpfs    defaults,noatime,nosuid,mode=0755,size=100m    0 0
+    ```
 
 ---
-Run these commands to activate the hotspot and reboot.
+
+## Finalizing
 
 ```bash
 sudo systemctl unmask hostapd
@@ -159,6 +203,8 @@ sudo systemctl enable dnsmasq
 sudo reboot
 ```
 
-*   **Connect:** WiFi "WeatherStation".
-*   **View:** Captive portal or `http://192.168.4.1`.
-*   **Manage:** `ssh weatherstation@192.168.4.1`.
+### How to Access
+1.  **Connect:** Join the WiFi network `WeatherStation`.
+2.  **Dashboard:** A "Sign In" popup should appear. If not, browse to `http://192.168.4.1`.
+3.  **Maintenance:** SSH into the Pi using:
+    `ssh weatherstation@192.168.4.1`
