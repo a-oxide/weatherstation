@@ -5,8 +5,8 @@ A class project to create a standalone, offline Weather Station for **Yes Farm**
 This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log sensor data to SQLite and a Flask-based web dashboard. It functions as a Captive Portal, allowing users to view weather data without an internet connection.
 
 ### Hardware Notes
-*   **Controller:** Raspberry Pi Zero 2 W.
-*   **Sensors:** SparkFun Weather Meters (Wind/Rain) + Associated HAT + BME280.
+*   **Controller:** Raspberry Pi 3B+
+*   **Sensors:** SparkFun Weather Meters (Wind/Rain) + Associated HAT w/ BME280.
 *   **Compatibility Warning:** Boards with Broadcom modems or the modern RPi5 GPIO scheme may not work with the current library set.
 
 ---
