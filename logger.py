@@ -13,8 +13,8 @@ DB_PATH = "/home/weatherstation/weather_data/weather.db"
 LOG_INTERVAL = 60  # seconds
 
 # GPIO Pins (BC Robotics Hat)
-PIN_WIND_SPEED = 5
-PIN_RAIN = 6
+PIN_WIND_SPEED = 17
+PIN_RAIN = 23
 
 # I2C Addresses
 ADDR_BME = 0x77
