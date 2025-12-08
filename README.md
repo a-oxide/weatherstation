@@ -30,7 +30,7 @@ This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log
 3.  **Install Dependencies:**
     *   *Includes system math libraries for NumPy and network tools for the hotspot.*
     ```bash
-    sudo apt install git python3-venv python3-pip libopenblas-dev i2c-tools hostapd dnsmasq dhcpcd-base -y
+    sudo apt install git python3-venv python3-pip libopenblas-dev i2c-tools hostapd dnsmasq dhcpcd-base swig liblgpio-dev -y
     ```
 
 4.  **Allow Web Server to Sync Time:**
@@ -56,7 +56,7 @@ This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log
     cd ~/weather_project
     python3 -m venv venv
     source venv/bin/activate
-    pip install flask pandas adafruit-circuitpython-bme280 adafruit-circuitpython-ads1x15 adafruit-circuitpython-ina219 openpyxl gpiozero
+    pip install flask pandas adafruit-circuitpython-bme280 adafruit-circuitpython-ads1x15 adafruit-circuitpython-ina219 openpyxl gpiozero lgpio
     ```
 
 3.  **Download Offline Assets:**
