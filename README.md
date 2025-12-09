@@ -2,7 +2,7 @@
 
 A class project to create a standalone, offline Weather Station for **Yes Farm**, operated by the Black Farmers Collective.
 
-This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log sensor data to SQLite and a Flask-based web dashboard. It functions as a Captive Portal, allowing users to view weather data without an internet connection.
+This system runs on a Raspberry Pi 3B+ using a custom Python backend to log sensor data to SQLite and a Flask-based web dashboard. It functions as a Captive Portal, allowing users to view weather data without an internet connection.
 
 ### Hardware Notes
 *   **Controller:** Raspberry Pi 3B+
@@ -13,7 +13,7 @@ This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log
 
 ## Installation & Setup Guide
 
-**Target OS:** Raspberry Pi OS Lite (Bookworm or Trixie) - 32-bit or 64-bit.
+**Target OS:** Raspberry Pi OS Lite (Bookworm) 64-bit. 
 **Default User:** `weatherstation`
 
 ### Phase 1: System Preparation
@@ -41,6 +41,11 @@ This system runs on a Raspberry Pi Zero 2 W using a custom Python backend to log
     Add this line to the very bottom of the file:
     ```text
     weatherstation ALL=(ALL) NOPASSWD: /usr/bin/date
+    ```
+
+5.  **Allow Python to use Port 80**
+    ```bash
+    sudo setcap 'cap_net_bind_service=+ep' $(readlink -f /usr/bin/python3)
     ```
 
 ### Phase 2: Project Environment
@@ -121,12 +126,9 @@ sudo systemctl enable weather-logger.service
 sudo systemctl enable weather-web.service
 ```
 
-### Phase 4: Network Configuration (Hotspot & Captive Portal)
+### Phase 4: Network Configuration
 
-*Note: These steps prevent conflicts between NetworkManager and dnsmasq on newer Raspberry Pi OS versions.*
-
-1.  **Disable System DNS Resolver:**
-    *   Frees Port 53 for our specific use.
+1.  **Stop Conflicts:**
     ```bash
     sudo systemctl stop systemd-resolved
     sudo systemctl disable systemd-resolved
@@ -134,10 +136,9 @@ sudo systemctl enable weather-web.service
     echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
     ```
 
-2.  **Configure NetworkManager:**
-    *   Tells the OS to ignore the WiFi chip so `hostapd` can manage it.
-    *   Edit `/etc/NetworkManager/NetworkManager.conf`:
-    ```ini
+2.  **Configure Captive Portal**
+    *   Edit `/etc/dnsmasq.conf`:
+    ```text
     [keyfile]
     unmanaged-devices=interface-name:wlan0
     ```
@@ -145,66 +146,33 @@ sudo systemctl enable weather-web.service
 3.  **Set Static IP:**
     *   Edit `/etc/dhcpcd.conf` (Add to bottom):
     ```text
-    interface wlan0
-    static ip_address=192.168.4.1/24
-    nohook wpa_supplicant
-    ```
-
-4.  **Configure DHCP & Captive Portal:**
-    *   Edit `/etc/dnsmasq.conf`:
-    ```text
     interface=wlan0
     dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
-    # Captive Portal Logic: Redirect all domains to the Pi
     address=/#/192.168.4.1
-    no-resolv
+    # Apple/Android Detection
+    address=/captive.apple.com/192.168.4.1
+    address=/connectivitycheck.gstatic.com/192.168.4.1
+    # Routing
+    domain=wlan
+    dhcp-option=3,192.168.4.1
+    dhcp-option=6,192.168.4.1
     ```
 
-5.  **Configure Hotspot Radio:**
-    *   Edit `/etc/hostapd/hostapd.conf`:
-    ```text
-    interface=wlan0
-    driver=nl80211
-    ssid=WeatherStation
-    hw_mode=g
-    channel=7
-    auth_algs=1
-    ignore_broadcast_ssid=0
-    ```
-    *   Point system to config: Edit `/etc/default/hostapd` and find `DAEMON_CONF`:
-    ```text
-    DAEMON_CONF="/etc/hostapd/hostapd.conf"
-    ```
-
-### Phase 5: Hardening (Low-Write Mode)
-*Prevents SD card corruption during abrupt power loss.*
-
-1.  **Disable Swap:**
+4.  **Create the hotspot:**
     ```bash
-    sudo systemctl disable dphys-swapfile
-    sudo dphys-swapfile swapoff
+    sudo nmcli con add type wifi ifname wlan0 mode ap con-name WeatherStation ssid WeatherStation ipv4.method manual ipv4.addresses 192.168.4.1/24 ipv4.gateway 192.168.4.1 wifi-sec.key-mgmt none connection.autoconnect yes connection.autoconnect-priority 100
     ```
-
-2.  **Move Logs to RAM:**
-    *   Edit `/etc/fstab` and add these lines:
-    ```text
-    tmpfs    /tmp    tmpfs    defaults,noatime,nosuid,size=100m    0 0
-    tmpfs    /var/log    tmpfs    defaults,noatime,nosuid,mode=0755,size=100m    0 0
-    ```
-
 ---
 
 ## Finalizing
 
 ```bash
-sudo systemctl unmask hostapd
-sudo systemctl enable hostapd
 sudo systemctl enable dnsmasq
 sudo reboot
 ```
 
 ### How to Access
 1.  **Connect:** Join the WiFi network `WeatherStation`.
-2.  **Dashboard:** A "Sign In" popup should appear. If not, browse to `http://192.168.4.1`.
+2.  **Dashboard:** The captive portal popup should appear. If not, browse to `http://192.168.4.1` or any other URL.
 3.  **Maintenance:** SSH into the Pi using:
     `ssh weatherstation@192.168.4.1`
