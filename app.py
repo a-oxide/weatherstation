@@ -112,7 +112,6 @@ def api_v2():
         SELECT SUM(rain_mm) as total_rain, AVG(temp_c) as avg_temp, MAX(temp_c) as max_temp, MIN(temp_c) as min_temp,
                MAX(wind_speed_kph) as max_wind, AVG(wind_speed_kph) as avg_wind,
                AVG(humidity) as avg_hum, AVG(pressure_hpa) as avg_pres,
-               AVG(battery_volts) as batt_volts
         FROM weather_data WHERE timestamp >= ?
     """
     curr = dict(conn.execute(stats_q, (start,)).fetchone())
@@ -312,8 +311,8 @@ HTML_TEMPLATE = """
                 <div class="tab" onclick="setChartMode('atmos')">Atmos</div>
             </div>
             <select id="timeRange" onchange="fetchData()">
-                <option value="24h">24 Hours</option>
-                <option value="7d" selected>7 Days</option>
+                <option value="24h"selected>24 Hours</option>
+                <option value="7d">7 Days</option>
                 <option value="30d">30 Days</option>
             </select>
         </div>
