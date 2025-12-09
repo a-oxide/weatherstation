@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, jsonify, send_file, url_for
+from flask import Flask, render_template_string, request, jsonify, send_file, url_for, redirect
 import sqlite3
 import io
 import datetime
@@ -71,31 +71,6 @@ def generate_objective_insights(curr, prev, range_arg):
     return insights
 
 # flask routes
-
-@app.route('/api/sync-time', methods=['POST'])
-def sync_time():
-    try:
-        data = request.json
-        client_ts = data.get('timestamp') / 1000 
-        client_dt = datetime.datetime.fromtimestamp(client_ts)
-        server_dt = datetime.datetime.now()
-        
-        diff = abs((client_dt - server_dt).total_seconds())
-        
-        if diff > 60:
-            time_str = client_dt.strftime('%Y-%m-%d %H:%M:%S')
-            # Requires sudoers permission
-            subprocess.run(["sudo", "date", "-s", time_str], check=True)
-            return jsonify({"status": "updated", "diff": diff})
-        else:
-            return jsonify({"status": "ignored", "diff": diff})
-    except Exception as e:
-        print(f"Time Sync Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
 
 @app.route('/api/v2/data')
 def api_v2():
@@ -177,6 +152,27 @@ def api_v2():
         "insights": generate_objective_insights(curr, prev, range_arg)
     })
 
+@app.route('/api/sync-time', methods=['POST'])
+def sync_time():
+    try:
+        data = request.json
+        client_ts = data.get('timestamp') / 1000 
+        client_dt = datetime.datetime.fromtimestamp(client_ts)
+        server_dt = datetime.datetime.now()
+        
+        diff = abs((client_dt - server_dt).total_seconds())
+        
+        if diff > 60:
+            time_str = client_dt.strftime('%Y-%m-%d %H:%M:%S')
+            # Requires sudoers permission
+            subprocess.run(["sudo", "date", "-s", time_str], check=True)
+            return jsonify({"status": "updated", "diff": diff})
+        else:
+            return jsonify({"status": "ignored", "diff": diff})
+    except Exception as e:
+        print(f"Time Sync Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/export')
 def export():
     conn = get_db()
@@ -193,7 +189,13 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-# html (provided by Gemini 3 Pro Preview)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    print(f"Captive Portal Hit: /{path}")
+    return render_template_string(HTML_TEMPLATE)
+
+# html (provided in part by Gemini 3 Pro Preview)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
